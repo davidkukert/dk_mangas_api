@@ -1,8 +1,6 @@
-import { and, eq, ne } from 'drizzle-orm'
 import Elysia from 'elysia'
-import { db } from '@/db'
-import { usersTable } from '@/db/schema'
 import UserModel from '@/models/user'
+import { UsersService } from '@/services/users'
 import setup from '@/setup'
 
 export default new Elysia({
@@ -10,10 +8,11 @@ export default new Elysia({
 })
 	.use(setup)
 	.use(UserModel)
+	.decorate('users', new UsersService())
 	.get(
 		'/',
-		async () => {
-			const data = await db.select().from(usersTable)
+		async ({ users }) => {
+			const data = await users.findMany()
 			return {
 				data,
 			}
@@ -24,18 +23,12 @@ export default new Elysia({
 	)
 	.post(
 		'/',
-		async ({ HttpError, body, set }) => {
+		async ({ HttpError, body, set, users }) => {
 			const { username, password } = body
-			const data = (
-				await db
-					.insert(usersTable)
-					.values({
-						username,
-						password: await Bun.password.hash(password),
-					})
-					.returning()
-					.onConflictDoNothing()
-			)[0]
+			const data = await users.create({
+				username,
+				password: await Bun.password.hash(password),
+			})
 
 			if (!data) {
 				throw HttpError.Conflict('User already exists')
@@ -55,10 +48,8 @@ export default new Elysia({
 	)
 	.get(
 		'/:id',
-		async ({ HttpError, params: { id } }) => {
-			const data = (
-				await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1)
-			)[0]
+		async ({ HttpError, params: { id }, users }) => {
+			const data = await users.findById(id)
 
 			if (!data) {
 				throw HttpError.NotFound('User not found')
@@ -74,37 +65,28 @@ export default new Elysia({
 	)
 	.put(
 		'/:id',
-		async ({ HttpError, body, params: { id } }) => {
-			const user = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1)
-			if (!user[0]) {
+		async ({ HttpError, body, params: { id }, users }) => {
+			const user = await users.findById(id)
+			if (!user) {
 				throw HttpError.NotFound('User not found')
 			}
 
 			const { username, password } = body
 
-			if (username && !(user[0].username === username)) {
-				const usernameExists = await db
-					.select()
-					.from(usersTable)
-					.where(and(eq(usersTable.username, username), ne(usersTable.id, id)))
-				if (usernameExists.length > 0) {
+			if (username && !(user.username === username)) {
+				const usernameExists = await users.existsByUsernameAndId(username, id)
+				if (usernameExists) {
 					throw HttpError.Conflict('Username already exists')
 				}
 			}
 
-			const data = (
-				await db
-					.update(usersTable)
-					.set({
-						username,
-						password: password && (await Bun.password.hash(password)),
-					})
-					.where(eq(usersTable.id, id))
-					.returning()
-			)[0]
+			const data = await users.update(id, {
+				username,
+				password: password && (await Bun.password.hash(password)),
+			})
 
 			return {
-				data: data ?? user[0],
+				data: data ?? user,
 			}
 		},
 		{
@@ -112,13 +94,13 @@ export default new Elysia({
 			response: 'user.show',
 		},
 	)
-	.delete('/:id', async ({ HttpError, params: { id } }) => {
-		const user = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1)
-		if (!user[0]) {
+	.delete('/:id', async ({ HttpError, params: { id }, users }) => {
+		const user = await users.findById(id)
+		if (!user) {
 			throw HttpError.NotFound('User not found')
 		}
 
-		await db.delete(usersTable).where(eq(usersTable.id, id))
+		await users.delete(id)
 
 		return {
 			message: 'User deleted',
