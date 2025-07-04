@@ -10,7 +10,7 @@ export type UserInsertInput = Static<typeof userInsertSchema>
 export type UserUpdateInput = Static<typeof userUpdateSchema>
 export type UserSelectOutput = Static<typeof userSelectSchema>
 
-export default new Elysia({
+export const UserModel = new Elysia({
 	name: 'Model.User',
 }).model({
 	'user.create': t.Omit(userInsertSchema, [

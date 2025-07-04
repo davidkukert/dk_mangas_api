@@ -1,7 +1,7 @@
-import { and, eq, exists, ne } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { db } from '@/db'
 import { usersTable } from '@/db/schema'
-import type { UserInsertInput, UserUpdateInput } from '@/models/user'
+import type { UserInsertInput, UserUpdateInput } from '@/modules/users/model'
 
 export class UsersService {
 	async findMany() {
@@ -11,6 +11,15 @@ export class UsersService {
 
 	async findById(id: string) {
 		const result = await db.select().from(usersTable).where(eq(usersTable.id, id)).limit(1)
+		return result[0]
+	}
+
+	async findByUsername(username: string) {
+		const result = await db
+			.select()
+			.from(usersTable)
+			.where(eq(usersTable.username, username))
+			.limit(1)
 		return result[0]
 	}
 

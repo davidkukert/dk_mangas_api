@@ -1,9 +1,9 @@
 import Elysia from 'elysia'
-import UserModel from '@/models/user'
-import { UsersService } from '@/services/users'
+import { UserModel } from '@/modules/users/model'
+import { UsersService } from '@/modules/users/service'
 import setup from '@/setup'
 
-export default new Elysia({
+export const users = new Elysia({
 	prefix: '/users',
 })
 	.use(setup)
@@ -65,11 +65,17 @@ export default new Elysia({
 	)
 	.put(
 		'/:id',
-		async ({ HttpError, body, params: { id }, users }) => {
+		async ({ HttpError, body, params: { id }, users, currentUser, authorization }) => {
 			const user = await users.findById(id)
 			if (!user) {
 				throw HttpError.NotFound('User not found')
 			}
+
+			await authorization(currentUser, 'update', {
+				__typename: 'User',
+				id: user.id,
+				role: user.role,
+			})
 
 			const { username, password } = body
 
@@ -92,17 +98,30 @@ export default new Elysia({
 		{
 			body: 'user.update',
 			response: 'user.show',
+			privateRoute: true,
 		},
 	)
-	.delete('/:id', async ({ HttpError, params: { id }, users }) => {
-		const user = await users.findById(id)
-		if (!user) {
-			throw HttpError.NotFound('User not found')
-		}
+	.delete(
+		'/:id',
+		async ({ HttpError, params: { id }, users, currentUser, authorization }) => {
+			const user = await users.findById(id)
+			if (!user) {
+				throw HttpError.NotFound('User not found')
+			}
 
-		await users.delete(id)
+			await authorization(currentUser, 'update', {
+				__typename: 'User',
+				id: user.id,
+				role: user.role,
+			})
 
-		return {
-			message: 'User deleted',
-		}
-	})
+			await users.delete(id)
+
+			return {
+				message: 'User deleted',
+			}
+		},
+		{
+			privateRoute: true,
+		},
+	)
